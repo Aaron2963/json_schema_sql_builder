@@ -38,6 +38,7 @@ class Storage
 
     static public function SetSchemaFromURI(string $URI)
     {
+        $URI = \trim($URI, '#');
         $Schema = file_get_contents($URI);
         $Schema = json_decode($Schema, true);
         if ($Schema === false) {
@@ -48,6 +49,7 @@ class Storage
 
     static public function AddSelectExpression(string $URI, ?string $SQLString)
     {
+        $URI = str_replace('##/', '#/', $URI);
         self::$SelectExpressions[$URI] = $SQLString;
     }
 
@@ -58,7 +60,7 @@ class Storage
             throw new \Exception("Schema not found: $URI");
         }
         if (array_key_exists($URI, self::$SelectExpressions)) {
-            if (self::$SelectExpressions[$URI] === null) {
+            if (self::$SelectExpressions[$URI] == null) {
                 return null;
             }
             return self::$SelectExpressions[$URI];
@@ -69,5 +71,15 @@ class Storage
         $Keys = explode('/', $URI);
         $Key = array_pop($Keys);
         return "$Table.$Key";
+    }
+
+    static public function HasSelectExpression(string $URI) : bool
+    {
+        return array_key_exists($URI, self::$SelectExpressions);
+    }
+
+    static public function DumpSelectExpressions()
+    {
+        var_dump(self::$SelectExpressions);
     }
 }

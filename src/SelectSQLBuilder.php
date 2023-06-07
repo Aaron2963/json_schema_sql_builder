@@ -2,11 +2,13 @@
 
 namespace Lin\JsonSchemaSQLBuilder;
 
+use PDO;
 use Lin\JsonSchemaSQLBuilder\Storage;
 use Lin\JsonSchemaSQLBuilder\SQLBuilder;
 
 class SelectSQLBuilder extends SQLBuilder
 {
+    protected \PDO $DB;
     protected string $SchemaURI;
     protected array $SelectExpressions = [];
     protected array $WhereConditions = [];
@@ -16,11 +18,14 @@ class SelectSQLBuilder extends SQLBuilder
     protected int $Limit = 10;
     protected int $Offset = 0;
 
-    public function __construct(string $SchemaURI)
+    public function __construct(string $SchemaURI, ?\PDO $DB = null)
     {
-        $this->SchemaURI = $SchemaURI;
+        $this->SchemaURI = \trim($SchemaURI, '#');
         if (Storage::GetSchema($SchemaURI) == null) {
             Storage::SetSchemaFromURI($SchemaURI);
+        }
+        if ($DB != null) {
+            $this->DB = $DB;
         }
         parent::__construct(Storage::GetSchema($SchemaURI)['@table']);
     }
@@ -49,9 +54,10 @@ class SelectSQLBuilder extends SQLBuilder
         return $this;
     }
 
-    public function Build(): string
+    public function Build($Minify = false): string
     {
         $Result = "";
+        if ($Minify) $this->MinifySelectExpressions();
         $Result .= 'SELECT ' . implode(', ', $this->SelectExpressions) . ' FROM ' . $this->Table;
         if (\count($this->WhereConditions) > 0) {
             $Result .= ' WHERE ' . implode(' AND ', $this->WhereConditions);
@@ -71,11 +77,19 @@ class SelectSQLBuilder extends SQLBuilder
         return $Result;
     }
 
+    public function Execute(): \PDOStatement
+    {
+        $SQL = $this->Build();
+        $Statement = $this->DB->prepare($SQL);
+        $Statement->execute($this->BindValues);
+        return $Statement;
+    }
+
     public function SetSelectExpressions(): self
     {
         $Columns = [];
         $Schema = Storage::GetSchema($this->SchemaURI);
-        $$SchemaURI = \trim($this->SchemaURI, '#');
+        $SchemaURI = \trim($this->SchemaURI, '#');
         $Queue = [["$SchemaURI#" => $Schema]];
         while (\count($Queue) > 0) {
             $Prop = \array_shift($Queue);
@@ -86,11 +100,11 @@ class SelectSQLBuilder extends SQLBuilder
                     $Queue[] = ["$Key/properties/$SubKey" => $SubAttr];
                 }
             } else if ($Attr['type'] === 'array') {
-                $Queue[] = ["$Key/items" => $Attr['items']];
+                continue;
             } else {
                 $SQLString = Storage::GetSelectExpression($Key);
-                if ($SQLString !== null) {
-                    $Columns[] = "$SQLString as $Key";
+                if ($SQLString != null) {
+                    $Columns[] = "$SQLString AS $Key";
                 }
             }
         }
@@ -98,16 +112,26 @@ class SelectSQLBuilder extends SQLBuilder
         return $this;
     }
 
+    protected function MinifySelectExpressions(): self
+    {
+        $this->SelectExpressions = \array_map(function ($Expression) {
+            $Escaped = \addcslashes($this->SchemaURI . '#/properties/', '\\/');
+            $Replaced = \preg_replace('/ AS ' . $Escaped . '/', ' AS ', $Expression);
+            return \preg_replace('/\/properties\//', '/', $Replaced);
+        }, $this->SelectExpressions);
+        return $this;
+    }
+
     public function AddSelect(string $SQLExpression, string $Alias): self
     {
-        $this->SelectExpressions[] = "$SQLExpression as $Alias";
+        $this->SelectExpressions[] = "$SQLExpression AS $Alias";
         return $this;
     }
 
     public function RemoveSelect(string $Alias): self
     {
         $this->SelectExpressions = \array_filter($this->SelectExpressions, function ($Expression) use ($Alias) {
-            return !\str_ends_with($Expression, "as $Alias");
+            return !\str_ends_with($Expression, "AS $Alias");
         });
         return $this;
     }
