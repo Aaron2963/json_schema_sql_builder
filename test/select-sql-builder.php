@@ -23,6 +23,10 @@ try {
   exit;
 }
 
+/**
+ * Test SelectSQLBuilder::Execute()
+ */
+
 // build sql query with SelectSQLBuilder
 Storage::AddSelectExpression($SchemaURI . '#/properties/_type_name', '(SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1)');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight', 'products.weight');
@@ -52,11 +56,33 @@ foreach ($ExpectedArray as $i => $Expected) {
 
 // compare result
 if ($Result === $ExpectedArray) {
-  echo "Test passed\n";
+  echo "[PASS] SelectSQLBuilder::Execute test passed\n";
 } else {
-  echo "Test failed\n";
+  echo "[FAIL] test failed\n";
   echo "Expected:\n";
   print_r($ExpectedArray);
   echo "Result:\n";
   print_r($Result);
+}
+
+/**
+ * Test SelectSQLBuilder::Count()
+ */
+
+$Builder = new SelectSQLBuilder($SchemaURI, $DB);
+$Builder->AddWhere("products.keywords like :keywords", ['keywords' => '%apple%']);
+$Count = $Builder->Count();
+
+$CountSQLString = "SELECT COUNT(*) FROM products WHERE products.keywords like '%apple%';";
+$Statement = $DB->query($CountSQLString);
+$ExpectedCount = (int) $Statement->fetchAll(\PDO::FETCH_ASSOC)[0]['COUNT(*)'];
+
+if ($Count === $ExpectedCount) {
+  echo "[PASS] SelectSQLBuilder::Count test passed\n";
+} else {
+  echo "[FAIL] test failed\n";
+  echo "Expected:\n";
+  print_r($ExpectedCount);
+  echo "Result:\n";
+  print_r($Count);
 }

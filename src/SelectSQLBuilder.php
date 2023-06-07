@@ -91,6 +91,19 @@ class SelectSQLBuilder extends SQLBuilder
         }, $DataArray);
     }
 
+    public function Count(): int
+    {
+        $SQL = $this->Build(true);
+        $SQL = \preg_replace('/SELECT .* FROM/', 'SELECT COUNT(*) FROM', $SQL);
+        $Statement = $this->DB->prepare($SQL);
+        $Statement->execute($this->BindValues);
+        $DataArray = $Statement->fetchAll(\PDO::FETCH_ASSOC);
+        if ($Statement->errorCode() !== '00000') {
+            throw new \Exception($Statement->errorInfo()[2]);
+        }
+        return (int) $DataArray[0]['COUNT(*)'];
+    }
+
     public function SetSelectExpressions(): self
     {
         $Columns = [];
