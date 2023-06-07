@@ -77,12 +77,18 @@ class SelectSQLBuilder extends SQLBuilder
         return $Result;
     }
 
-    public function Execute(): \PDOStatement
+    public function Execute(): array
     {
         $SQL = $this->Build();
         $Statement = $this->DB->prepare($SQL);
         $Statement->execute($this->BindValues);
-        return $Statement;
+        $DataArray = $Statement->fetchAll(\PDO::FETCH_ASSOC);
+        if ($Statement->errorCode() !== '00000') {
+            throw new \Exception($Statement->errorInfo()[2]);
+        }
+        return array_map(function ($Data) {
+            return $this->ConvertDataKeys($Data);
+        }, $DataArray);
     }
 
     public function SetSelectExpressions(): self
@@ -104,7 +110,7 @@ class SelectSQLBuilder extends SQLBuilder
             } else {
                 $SQLString = Storage::GetSelectExpression($Key);
                 if ($SQLString != null) {
-                    $Columns[] = "$SQLString AS $Key";
+                    $Columns[] = "$SQLString AS '$Key'";
                 }
             }
         }
@@ -116,7 +122,7 @@ class SelectSQLBuilder extends SQLBuilder
     {
         $this->SelectExpressions = \array_map(function ($Expression) {
             $Escaped = \addcslashes($this->SchemaURI . '#/properties/', '\\/');
-            $Replaced = \preg_replace('/ AS ' . $Escaped . '/', ' AS ', $Expression);
+            $Replaced = \preg_replace('/ AS \'' . $Escaped . '/', ' AS \'', $Expression);
             return \preg_replace('/\/properties\//', '/', $Replaced);
         }, $this->SelectExpressions);
         return $this;
@@ -124,14 +130,14 @@ class SelectSQLBuilder extends SQLBuilder
 
     public function AddSelect(string $SQLExpression, string $Alias): self
     {
-        $this->SelectExpressions[] = "$SQLExpression AS $Alias";
+        $this->SelectExpressions[] = "$SQLExpression AS '$Alias'";
         return $this;
     }
 
     public function RemoveSelect(string $Alias): self
     {
         $this->SelectExpressions = \array_filter($this->SelectExpressions, function ($Expression) use ($Alias) {
-            return !\str_ends_with($Expression, "AS $Alias");
+            return !\str_ends_with($Expression, "AS '$Alias'");
         });
         return $this;
     }
@@ -200,7 +206,22 @@ class SelectSQLBuilder extends SQLBuilder
 
     public function ConvertDataKeys(array $Data): array
     {
-        //TODO: Implement
-        throw new \Exception("Not implemented");
+        $Result = [];
+        $Schema = Storage::GetSchema($this->SchemaURI);
+        $Iterate = function ($Schema, $Key, $Data) use (&$Iterate) {
+            if ($Schema['type'] === 'object') {
+                $Output = [];
+                foreach ($Schema['properties'] as $SubKey => $SubSchema) {
+                    $Output[$SubKey] = call_user_func_array($Iterate, [$SubSchema, $Key . '/properties/' . $SubKey, $Data]);
+                }
+                return $Output;
+            } else if ($Schema['type'] === 'array') {
+                return [];
+            } else {
+                return $Data[$Key];
+            }
+        };
+        $Result = call_user_func_array($Iterate, [$Schema, $this->SchemaURI . '#', $Data]);
+        return $Result;
     }
 }

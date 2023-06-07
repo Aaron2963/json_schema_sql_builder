@@ -13,6 +13,8 @@ use Lin\JsonSchemaSqlBuilder\Storage;
 use Lin\JsonSchemaSqlBuilder\SelectSQLBuilder;
 
 $SchemaURI = __DIR__ . '/schema.json#';
+$DSN = 'mysql:host=db;dbname=test;charset=utf8mb4';
+$DB = new \PDO($DSN, 'test', 'test');
 
 try {
   Storage::SetSchemaFromURI($SchemaURI);
@@ -20,18 +22,41 @@ try {
   echo $e->getMessage();
   exit;
 }
-// add select expressions for indirect corresponding properties
+
+// build sql query with SelectSQLBuilder
 Storage::AddSelectExpression($SchemaURI . '#/properties/_type_name', '(SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1)');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight', 'products.weight');
-// Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight_unit', 'products.unit');
-Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight_unit', null);
+Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight_unit', 'products.weight_unit');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_colors', null);
-$Builder = new SelectSQLBuilder($SchemaURI, null);
+$Builder = new SelectSQLBuilder($SchemaURI, $DB);
 $Builder->SetSelectExpressions()
-  ->AddWhere("products.keywords LIKE '%:keywords%'", ['keywords' => 'apple'])
-  ->AddWhere("products.price >= :price", ['price' => 100])
+  ->AddWhere("products.keywords like :keywords", ['keywords' => '%apple%'])
   ->AddOrderBy('products.price', 'DESC')
   ->SetLimit(10)
   ->SetOffset(0);
-echo $Builder->Build(true);
-// SELECT products.id AS id, products.name AS name, (SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1) AS _type_name, products.weight AS _weight/weight FROM products WHERE products.keywords LIKE '%:keywords%' AND products.price >= :price ORDER BY products.price DESC LIMIT 10 OFFSET 0;
+$Result = $Builder->Execute();
+
+// expected result
+$SQLString = "SELECT id, name, (SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1) AS _type_name, weight, weight_unit FROM products WHERE products.keywords like '%apple%' ORDER BY products.price DESC LIMIT 10 OFFSET 0;";
+$Statement = $DB->query($SQLString);
+$ExpectedArray = $Statement->fetchAll(\PDO::FETCH_ASSOC);
+foreach ($ExpectedArray as $i => $Expected) {
+  $ExpectedArray[$i]['_weight'] = [
+    'weight' => $Expected['weight'],
+    'weight_unit' => $Expected['weight_unit']
+  ];
+  $ExpectedArray[$i]['_colors'] = [];
+  unset($ExpectedArray[$i]['weight']);
+  unset($ExpectedArray[$i]['weight_unit']);
+}
+
+// compare result
+if ($Result === $ExpectedArray) {
+  echo "Test passed\n";
+} else {
+  echo "Test failed\n";
+  echo "Expected:\n";
+  print_r($ExpectedArray);
+  echo "Result:\n";
+  print_r($Result);
+}

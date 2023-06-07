@@ -68,20 +68,35 @@ try {
   echo $e->getMessage();
   exit;
 }
-// add select expressions for indirect corresponding properties
 Storage::AddSelectExpression($SchemaURI . '#/properties/_type_name', '(SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1)');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight', 'products.weight');
-// skip `_weight.weight_unit` property
-Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight_unit', null);
-$Builder = new SelectSQLBuilder($SchemaURI, null);
+Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight_unit', 'products.weight_unit');
+Storage::AddSelectExpression($SchemaURI . '#/properties/_colors', null);
+$Builder = new SelectSQLBuilder($SchemaURI, $DB);
 $Builder->SetSelectExpressions()
-  ->AddWhere("products.keywords LIKE '%:keywords%'", ['keywords' => 'apple'])
-  ->AddWhere("products.price >= :price", ['price' => 100])
+  ->AddWhere("products.keywords like :keywords", ['keywords' => '%apple%'])
   ->AddOrderBy('products.price', 'DESC')
   ->SetLimit(10)
   ->SetOffset(0);
-echo $Builder->Build(true);
-// SELECT products.id AS id, products.name AS name, (SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1) AS _type_name, products.weight AS _weight/weight FROM products WHERE products.keywords LIKE '%:keywords%' AND products.price >= :price ORDER BY products.price DESC LIMIT 10 OFFSET 0;
+$Result = $Builder->Execute();
+print_r($Result);
+// Array
+// (
+//   [0] => Array
+//     (
+//       [id] => 1
+//       [name] => Apple
+//       [_weight] => Array
+//         (
+//             [weight] => 100.00
+//             [weight_unit] => g
+//         )
+
+//       [_colors] => Array
+//         (
+//         )
+//     )
+// )
 ```
 
 As you can see, after initializing JSON schema storage, you can add select expressions to indirect corresponding properties (direct properties are automatically added to select expressions as `table_name.property_key`). Then you can build the SQL SELECT statement with `SelectSQLBuilder::Build` method.
