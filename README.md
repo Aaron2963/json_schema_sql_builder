@@ -18,6 +18,7 @@ For example, the JSON schema is as following:
 {
   "$schema": "http://json-schema.org/draft-06/schema#",
   "@table": "products",
+  "@id": "id",
   "type": "object",
   "properties": {
     "id": {
@@ -44,10 +45,26 @@ For example, the JSON schema is as following:
         }
       }
     },
-    "_colors": {
+    "_bids": {
       "type": "array",
+      "@table": "bids",
+      "@joinId": "product_id",
+      "@id": "id",
+      "@orderBy": "time DESC",
       "items": {
-        "type": "string"
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     }
   }
@@ -71,7 +88,6 @@ try {
 Storage::AddSelectExpression($SchemaURI . '#/properties/_type_name', '(SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1)');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight', 'products.weight');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight_unit', 'products.weight_unit');
-Storage::AddSelectExpression($SchemaURI . '#/properties/_colors', null);
 $Builder = new SelectSQLBuilder($SchemaURI, $DB);
 $Builder->SetSelectExpressions()
   ->AddWhere("products.keywords like :keywords", ['keywords' => '%apple%'])
@@ -79,24 +95,40 @@ $Builder->SetSelectExpressions()
   ->SetLimit(10)
   ->SetOffset(0);
 $Result = $Builder->Execute();
-print_r($Result);
-// Array
-// (
-//   [0] => Array
-//     (
-//       [id] => 1
-//       [name] => Apple
-//       [_weight] => Array
-//         (
-//             [weight] => 100.00
-//             [weight_unit] => g
-//         )
-
-//       [_colors] => Array
-//         (
-//         )
-//     )
-// )
+echo json_encode($Result, JSON_PRETTY_PRINT);
+// [
+//   {
+//     "id": "1",
+//     "name": "Apple",
+//     "_type_name": "Fruit",
+//     "_weight": {
+//       "weight": "100.00",
+//       "weight_unit": "g"
+//     },
+//     "_bids": [
+//       {
+//         "id": "7",
+//         "price": "400",
+//         "time": "2018-01-04 00:00:00"
+//       },
+//       {
+//         "id": "5",
+//         "price": "300",
+//         "time": "2018-01-03 00:00:00"
+//       },
+//       {
+//         "id": "3",
+//         "price": "200",
+//         "time": "2018-01-02 00:00:00"
+//       },
+//       {
+//         "id": "1",
+//         "price": "100",
+//         "time": "2018-01-01 00:00:00"
+//       }
+//     ]
+//   }
+// ]
 ```
 
-As you can see, after initializing JSON schema storage, you can add select expressions to indirect corresponding properties (direct properties are automatically added to select expressions as `table_name.property_key`). Then you can build the SQL SELECT statement with `SelectSQLBuilder::Build` method.
+As you can see, after initializing JSON schema storage, you can add select expressions to indirect corresponding properties (direct properties are automatically added to select expressions as `table_name.property_key`). Then you can build the SQL SELECT statement with `SelectSQLBuilder::Build` method. For more information, please refer to [the test script](test/select-sql-builder.php), you can also find database schema and data in [the test directory](test/).
