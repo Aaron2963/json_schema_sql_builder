@@ -31,7 +31,6 @@ try {
 Storage::AddSelectExpression($SchemaURI . '#/properties/_type_name', '(SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1)');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight', 'products.weight');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight_unit', 'products.weight_unit');
-Storage::AddSelectExpression($SchemaURI . '#/properties/_colors', null);
 $Builder = new SelectSQLBuilder($SchemaURI, $DB);
 $Builder->SetSelectExpressions()
   ->AddWhere("products.keywords like :keywords", ['keywords' => '%apple%'])
@@ -49,16 +48,28 @@ foreach ($ExpectedArray as $i => $Expected) {
     'weight' => $Expected['weight'],
     'weight_unit' => $Expected['weight_unit']
   ];
-  $ExpectedArray[$i]['_colors'] = [];
   unset($ExpectedArray[$i]['weight']);
   unset($ExpectedArray[$i]['weight_unit']);
+  $ExpectedArray[$i]['_bidTimes'] = [];
+  $ExpectedArray[$i]['_bids'] = [];
+  $BidSQLString = "SELECT id, time, price, product_id FROM bids WHERE product_id = {$Expected['id']} ORDER BY time DESC;";
+  $Statement = $DB->query($BidSQLString);
+  $BidArray = $Statement->fetchAll(\PDO::FETCH_ASSOC);
+  foreach ($BidArray as $Bid) {
+    $ExpectedArray[$i]['_bidTimes'][] = $Bid['time'];
+    $ExpectedArray[$i]['_bids'][] = [
+      'id' => $Bid['id'],
+      'price' => $Bid['price'],
+      'time' => $Bid['time']
+    ];
+  }
 }
 
 // compare result
 if ($Result === $ExpectedArray) {
   echo "[PASS] SelectSQLBuilder::Execute test passed\n";
 } else {
-  echo "[FAIL] test failed\n";
+  echo "[FAIL] SelectSQLBuilder::Execute test failed\n";
   echo "Expected:\n";
   print_r($ExpectedArray);
   echo "Result:\n";
@@ -69,20 +80,19 @@ if ($Result === $ExpectedArray) {
  * Test SelectSQLBuilder::Count()
  */
 
-$Builder = new SelectSQLBuilder($SchemaURI, $DB);
-$Builder->AddWhere("products.keywords like :keywords", ['keywords' => '%apple%']);
+// build sql query with SelectSQLBuilder
 $Count = $Builder->Count();
 
+// expected result
 $CountSQLString = "SELECT COUNT(*) FROM products WHERE products.keywords like '%apple%';";
 $Statement = $DB->query($CountSQLString);
 $ExpectedCount = (int) $Statement->fetchAll(\PDO::FETCH_ASSOC)[0]['COUNT(*)'];
 
+// compare result
 if ($Count === $ExpectedCount) {
   echo "[PASS] SelectSQLBuilder::Count test passed\n";
 } else {
-  echo "[FAIL] test failed\n";
-  echo "Expected:\n";
-  print_r($ExpectedCount);
-  echo "Result:\n";
-  print_r($Count);
+  echo "[FAIL] SelectSQLBuilder::Count test failed\n";
+  echo "Expected: $ExpectedCount\n";
+  echo "Result: $Count\n";
 }

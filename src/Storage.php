@@ -53,7 +53,7 @@ class Storage
         self::$SelectExpressions[$URI] = $SQLString;
     }
 
-    static public function GetSelectExpression(string $URI) : ?string
+    static public function GetSelectExpression(string $URI): ?string
     {
         $Schema = self::GetSchema($URI);
         if (!isset($Schema)) {
@@ -65,15 +65,34 @@ class Storage
             }
             return self::$SelectExpressions[$URI];
         }
-        $URIRoot = explode('#', $URI)[0];
-        $Root = self::GetSchema("$URIRoot#");
-        $Table = explode(':', $Root['@table'])[0];
-        $Keys = explode('/', $URI);
-        $Key = array_pop($Keys);
+        // $URIRoot = explode('#', $URI)[0];
+        // $Root = self::GetSchema("$URIRoot#");
+        // $Table = explode(':', $Root['@table'])[0];
+        $Table = '';
+        $ParentURI = $URI;
+        while (empty($Table) && preg_match('/\/properties\/[^\/]+$/', $ParentURI) || preg_match('/\/items$/', $ParentURI)) {
+            $ParentURI = preg_replace('/\/properties\/[^\/]+$/', '', $ParentURI);
+            $ParentSchema = self::GetSchema($ParentURI);
+            if (isset($ParentSchema['@table'])) {
+                $Table = explode(':', $ParentSchema['@table'])[0];
+            } else if (preg_match('/\/items$/', $ParentURI)) {
+                $ParentURI = preg_replace('/\/items$/', '', $ParentURI);
+                $ParentSchema = self::GetSchema($ParentURI);
+                if (isset($ParentSchema['@table'])) {
+                    $Table = explode(':', $ParentSchema['@table'])[0];
+                }
+            }
+        }
+        if (isset($Schema['@column'])) {
+            $Key = $Schema['@column'];
+        } else {
+            $Keys = explode('/', $URI);
+            $Key = array_pop($Keys);
+        }
         return "$Table.$Key";
     }
 
-    static public function HasSelectExpression(string $URI) : bool
+    static public function HasSelectExpression(string $URI): bool
     {
         return array_key_exists($URI, self::$SelectExpressions);
     }
@@ -81,5 +100,10 @@ class Storage
     static public function DumpSelectExpressions()
     {
         var_dump(self::$SelectExpressions);
+    }
+
+    static public function DumpIndexes()
+    {
+        echo json_encode(self::$Indexes, JSON_PRETTY_PRINT);
     }
 }

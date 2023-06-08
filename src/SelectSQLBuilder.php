@@ -15,8 +15,10 @@ class SelectSQLBuilder extends SQLBuilder
     protected array $OrderByExpressions = [];
     protected array $GroupByExpressions = [];
     protected array $HavingConditions = [];
+    protected array $TableReferences = [];
     protected int $Limit = 10;
     protected int $Offset = 0;
+    protected string $ArraySeparator = ',';
 
     public function __construct(string $SchemaURI, ?\PDO $DB = null)
     {
@@ -59,6 +61,9 @@ class SelectSQLBuilder extends SQLBuilder
         $Result = "";
         if ($Minify) $this->MinifySelectExpressions();
         $Result .= 'SELECT ' . implode(', ', $this->SelectExpressions) . ' FROM ' . $this->Table;
+        if (\count($this->TableReferences) > 0) {
+            $Result .= ' INNER JOIN (' . implode(', ', array_keys($this->TableReferences)) . ') ON (' . implode(' AND ', array_values($this->TableReferences)) . ')';
+        }
         if (\count($this->WhereConditions) > 0) {
             $Result .= ' WHERE ' . implode(' AND ', $this->WhereConditions);
         }
@@ -94,7 +99,8 @@ class SelectSQLBuilder extends SQLBuilder
     public function Count(): int
     {
         $SQL = $this->Build(true);
-        $SQL = \preg_replace('/SELECT .* FROM/', 'SELECT COUNT(*) FROM', $SQL);
+        $SQL = \preg_replace('/LIMIT \d+ OFFSET \d+/', '', $SQL);
+        $SQL = 'SELECT COUNT(*) FROM (' . rtrim($SQL, ';') . ') t;';
         $Statement = $this->DB->prepare($SQL);
         $Statement->execute($this->BindValues);
         $DataArray = $Statement->fetchAll(\PDO::FETCH_ASSOC);
@@ -109,6 +115,8 @@ class SelectSQLBuilder extends SQLBuilder
         $Columns = [];
         $Schema = Storage::GetSchema($this->SchemaURI);
         $SchemaURI = \trim($this->SchemaURI, '#');
+        $Table = $Schema['@table'];
+        $TableKey = $Schema['@id'];
         $Queue = [["$SchemaURI#" => $Schema]];
         while (\count($Queue) > 0) {
             $Prop = \array_shift($Queue);
@@ -119,7 +127,37 @@ class SelectSQLBuilder extends SQLBuilder
                     $Queue[] = ["$Key/properties/$SubKey" => $SubAttr];
                 }
             } else if ($Attr['type'] === 'array') {
-                continue;
+                if (array_key_exists('@table', $Attr) && array_key_exists('@joinId', $Attr)) {
+                    $this->AddJoinOn($Attr['@table'], "$Table.$TableKey = {$Attr['@table']}.{$Attr['@joinId']}");
+                }
+                if (array_search($Attr['items']['type'], ['string', 'number', 'integer', 'boolean']) !== false) {
+                    $this->AddGroupBy("$Table.$TableKey");
+                    $SQLString = Storage::GetSelectExpression("$Key/items");
+                    $OrderBy = '';
+                    if (array_key_exists('@orderBy', $Attr)) {
+                        $OrderBy = ' ORDER BY ' . $Attr['@table'] . '.' . ($Attr['items']['properties'][$Attr['@orderBy']]['@column'] ?? $Attr['@orderBy']);
+                    }
+                    $Columns[] = "GROUP_CONCAT($SQLString$OrderBy SEPARATOR '{$this->ArraySeparator}') AS '$Key'";
+                } else if ($Attr['items']['type'] === 'object') {
+                    $this->AddGroupBy("$Table.$TableKey");
+                    // 決定排序參考的鍵
+                    $OrderBy = $Attr['@table'] . '.' . array_key_first($Attr['items']['properties']);
+                    if (isset($Attr['items']['properties'][$OrderBy]['@column'])) {
+                        $OrderBy = $Attr['@table'] . '.' . $Attr['items']['properties'][$OrderBy]['@column'];
+                    }
+                    if (array_key_exists('@id', $Attr['items'])) {
+                        $OrderBy = $Attr['@table'] . '.' . ($Attr['items']['properties'][$Attr['items']['@id']]['@column'] ?? $Attr['items']['@id']);
+                    }
+                    if (array_key_exists('@orderBy', $Attr)) {
+                        $OrderBy = $Attr['@table'] . '.' . ($Attr['items']['properties'][$Attr['@orderBy']]['@column'] ?? $Attr['@orderBy']);
+                    }
+                    foreach ($Attr['items']['properties'] as $SubKey => $SubAttr) {
+                        $SQLString = Storage::GetSelectExpression("$Key/items/properties/$SubKey");
+                        $Columns[] = "GROUP_CONCAT($SQLString ORDER BY $OrderBy SEPARATOR '{$this->ArraySeparator}') AS '$Key/items/properties/$SubKey'";
+                    }
+                } else {
+                    continue;
+                }
             } else {
                 $SQLString = Storage::GetSelectExpression($Key);
                 if ($SQLString != null) {
@@ -190,7 +228,9 @@ class SelectSQLBuilder extends SQLBuilder
 
     public function AddGroupBy(string $Expression): self
     {
-        $this->GroupByExpressions[] = $Expression;
+        if (!\in_array($Expression, $this->GroupByExpressions)) {
+            $this->GroupByExpressions[] = $Expression;    
+        }
         return $this;
     }
 
@@ -217,6 +257,21 @@ class SelectSQLBuilder extends SQLBuilder
         return $this;
     }
 
+    public function AddJoinOn(string $Table, string $Condition): self
+    {
+        $this->TableReferences[$Table] = $Condition;
+        if (count($this->TableReferences) > 1) {
+            \trigger_error('Join multiple tables may lead to unexpected result', E_USER_WARNING);
+        }
+        return $this;
+    }
+
+    public function RemoveJoin(string $Table): self
+    {
+        unset($this->TableReferences[$Table]);
+        return $this;
+    }
+
     public function ConvertDataKeys(array $Data): array
     {
         $Result = [];
@@ -229,7 +284,20 @@ class SelectSQLBuilder extends SQLBuilder
                 }
                 return $Output;
             } else if ($Schema['type'] === 'array') {
-                return [];
+                $Output = [];
+                if (array_search($Schema['items']['type'], ['string', 'number', 'integer', 'boolean']) !== false) {
+                    $Output = \explode($this->ArraySeparator, $Data[$Key]);
+                } else if ($Schema['items']['type'] === 'object') {
+                    $Length = \count(\explode($this->ArraySeparator, $Data[$Key . '/items/properties/' . array_key_first($Schema['items']['properties'])]));
+                    for ($i = 0; $i < $Length; $i++) {
+                        $SubObject = [];
+                        foreach ($Schema['items']['properties'] as $SubKey => $SubSchema) {
+                            $SubObject[$SubKey] = \explode($this->ArraySeparator, $Data[$Key . '/items/properties/' . $SubKey])[$i];
+                        }
+                        $Output[] = $SubObject;
+                    }
+                }
+                return $Output;
             } else {
                 return $Data[$Key];
             }
