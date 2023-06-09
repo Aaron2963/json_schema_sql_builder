@@ -65,9 +65,6 @@ class Storage
             }
             return self::$SelectExpressions[$URI];
         }
-        // $URIRoot = explode('#', $URI)[0];
-        // $Root = self::GetSchema("$URIRoot#");
-        // $Table = explode(':', $Root['@table'])[0];
         $Table = '';
         $ParentURI = $URI;
         while (empty($Table) && preg_match('/\/properties\/[^\/]+$/', $ParentURI) || preg_match('/\/items$/', $ParentURI)) {

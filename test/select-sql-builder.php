@@ -40,7 +40,7 @@ $Builder->SetSelectExpressions()
 $Result = $Builder->Execute();
 
 // expected result
-$SQLString = "SELECT id, name, (SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1) AS _type_name, weight, weight_unit FROM products WHERE products.keywords like '%apple%' ORDER BY products.price DESC LIMIT 10 OFFSET 0;";
+$SQLString = "SELECT id, name, type_id, (SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1) AS _type_name, weight, weight_unit FROM products WHERE products.keywords like '%apple%' ORDER BY products.price DESC LIMIT 10 OFFSET 0;";
 $Statement = $DB->query($SQLString);
 $ExpectedArray = $Statement->fetchAll(\PDO::FETCH_ASSOC);
 foreach ($ExpectedArray as $i => $Expected) {

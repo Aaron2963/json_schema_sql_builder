@@ -8,7 +8,7 @@ use Lin\JsonSchemaSQLBuilder\SQLBuilder;
 
 class SelectSQLBuilder extends SQLBuilder
 {
-    protected \PDO $DB;
+    protected PDO $DB;
     protected string $SchemaURI;
     protected array $SelectExpressions = [];
     protected array $WhereConditions = [];
@@ -20,7 +20,7 @@ class SelectSQLBuilder extends SQLBuilder
     protected int $Offset = 0;
     protected string $ArraySeparator = ',';
 
-    public function __construct(string $SchemaURI, ?\PDO $DB = null)
+    public function __construct(string $SchemaURI, ?PDO $DB = null)
     {
         $this->SchemaURI = \trim($SchemaURI, '#');
         if (Storage::GetSchema($SchemaURI) == null) {
@@ -87,7 +87,7 @@ class SelectSQLBuilder extends SQLBuilder
         $SQL = $this->Build();
         $Statement = $this->DB->prepare($SQL);
         $Statement->execute($this->BindValues);
-        $DataArray = $Statement->fetchAll(\PDO::FETCH_ASSOC);
+        $DataArray = $Statement->fetchAll(PDO::FETCH_ASSOC);
         if ($Statement->errorCode() !== '00000') {
             throw new \Exception($Statement->errorInfo()[2]);
         }
@@ -103,7 +103,7 @@ class SelectSQLBuilder extends SQLBuilder
         $SQL = 'SELECT COUNT(*) FROM (' . rtrim($SQL, ';') . ') t;';
         $Statement = $this->DB->prepare($SQL);
         $Statement->execute($this->BindValues);
-        $DataArray = $Statement->fetchAll(\PDO::FETCH_ASSOC);
+        $DataArray = $Statement->fetchAll(PDO::FETCH_ASSOC);
         if ($Statement->errorCode() !== '00000') {
             throw new \Exception($Statement->errorInfo()[2]);
         }
