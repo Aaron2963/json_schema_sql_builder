@@ -8,6 +8,7 @@ abstract class SQLBuilder
     protected array $BindValues = [];
 
     public abstract function Build(): string;
+    public abstract function Execute();
 
     public function __construct(string $Table)
     {

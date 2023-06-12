@@ -28,11 +28,11 @@ try {
  * Test SelectSQLBuilder::Execute()
  */
 
-$Data = json_decode('{"id":"1","name":"Apple","type_id":"1","_type_name":"Fruit","_weight":{"weight":"100.00","weight_unit":"g"},"_bidTimes":["2018-01-04 00:00:00","2018-01-03 00:00:00","2018-01-02 00:00:00","2018-01-01 00:00:00"],"_bids":[{"id":"7","price":"400","time":"2018-01-04 00:00:00"},{"id":"5","price":"300","time":"2018-01-03 00:00:00"},{"id":"3","price":"200","time":"2018-01-02 00:00:00"},{"id":"1","price":"100","time":"2018-01-01 00:00:00"}]}', 1);
+$Data = json_decode('{"id":"3","name":"Apple","type_id":"1","_type_name":"Fruit","_weight":{"weight":"100.00","weight_unit":"g"},"_bidTimes":["2018-01-04 00:00:00","2018-01-03 00:00:00","2018-01-02 00:00:00","2018-01-01 00:00:00"],"_bids":[{"id":"8","price":"400","time":"2018-01-04 00:00:00"},{"id":"9","price":"300","time":"2018-01-03 00:00:00"}]}', 1);
 Storage::AddSelectExpression($SchemaURI . '#/properties/_type_name', '(SELECT name FROM product_types WHERE product_types.id = products.type_id LIMIT 1)');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight', 'products.weight');
 Storage::AddSelectExpression($SchemaURI . '#/properties/_weight/properties/weight_unit', 'products.weight_unit');
 $Builder = new InsertSQLBuilder($SchemaURI, $DB, $Data);
 $Builder->SetAssignmentList();
-echo $Builder->Build();
+echo $Builder->Execute();
 echo "\n";
