@@ -6,7 +6,7 @@ use PDO;
 use Lin\JsonSchemaSQLBuilder\Storage;
 use Lin\JsonSchemaSQLBuilder\SQLBuilder;
 
-class InsertSQLBuilder extends SQLBuilder
+class UpsertSQLBuilder extends SQLBuilder
 {
     protected PDO $DB;
     protected string $SchemaURI;
@@ -39,10 +39,12 @@ class InsertSQLBuilder extends SQLBuilder
         foreach ($SortByRows as $Table => $Rows) {
             foreach ($Rows as $Row) {
                 $SQLString = "INSERT INTO $Table SET ";
+                $AssignString = '';
                 foreach ($Row as $Assignment) {
-                    $SQLString .= "{$Assignment['Column']} = {$Assignment['Value']}, ";
+                    $AssignString .= "{$Assignment['Column']} = {$Assignment['Value']}, ";
                 }
-                $SQLString = substr($SQLString, 0, -2);
+                $AssignString = substr($AssignString, 0, -2);
+                $SQLString .= $AssignString . ' ON DUPLICATE KEY UPDATE ' . $AssignString;
                 $SQLStrings[] = $SQLString;
             }
         }
@@ -65,6 +67,7 @@ class InsertSQLBuilder extends SQLBuilder
                 $OriSQL = $SQL;
                 $SQL = str_replace(":$Key,", ":$EncodedKey,", $SQL);
                 $SQL = str_replace(":$Key;", ":$EncodedKey;", $SQL);
+                $SQL = str_replace(":$Key ON", ":$EncodedKey ON", $SQL);
                 if ($SQL === $OriSQL) {
                     continue;
                 }
