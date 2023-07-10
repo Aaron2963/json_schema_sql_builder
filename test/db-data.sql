@@ -4,8 +4,8 @@ CREATE TABLE `products` (
   `type_id` int(11) DEFAULT NULL,
   `weight` decimal(10,2) DEFAULT NULL,
   `weight_unit` varchar(50) DEFAULT NULL,
-  `keywords` varchar(255) NOT NULL,
-  `price` int(11) NOT NULL
+  `keywords` varchar(255) DEFAULT NULL,
+  `price` int(11) NOT NULL DEFAULT '0',
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 CREATE TABLE `product_types` (

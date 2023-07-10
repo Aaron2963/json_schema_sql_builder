@@ -16,6 +16,7 @@ use Lin\JsonSchemaSqlBuilder\SelectSQLBuilder;
 $SchemaURI = __DIR__ . '/schema.json#';
 $DSN = 'mysql:host=db;dbname=test;charset=utf8mb4';
 $DB = new \PDO($DSN, 'test', 'test');
+$FinalResult = true;
 
 try {
     Storage::SetSchemaFromURI($SchemaURI);
@@ -128,12 +129,15 @@ $SelectBuilder->SetSelectExpressions()
 $Expected = $SelectBuilder->Execute();
 
 // compare
+$FinalResult = $FinalResult && ($ResultCount === $ExpectedCount && $Result === $Expected);
 if ($ResultCount === $ExpectedCount && $Result === $Expected) {
-    echo "Test UpsertSQLBuilder::Execute() passed.\n";
+    echo "[PASS] UpsertSQLBuilder::Execute test passed\n";
 } else {
-    echo "Test UpsertSQLBuilder::Execute() failed.\n";
+    echo "[FAIL] UpsertSQLBuilder::Execute test failed\n";
     echo "ResultCount: {$ResultCount}\n";
     echo "ExpectedCount: {$ExpectedCount}\n";
     echo "Result: " . json_encode($Result) . "\n";
     echo "Expected: " . json_encode($Expected) . "\n";
 }
+
+exit($FinalResult ? 0 : 1);
