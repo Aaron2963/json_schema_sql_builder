@@ -1,6 +1,8 @@
 {
     "name": "aaron-lin/json-schema-sql-builder",
+    "description": "A PHP library to build SQL query from JSON Schema",
     "type": "library",
+    "license": "proprietary",
     "autoload": {
         "psr-4": {
             "Lin\\JsonSchemaSQLBuilder\\": "src/"
