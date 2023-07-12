@@ -71,12 +71,12 @@ class Storage
             $ParentURI = preg_replace('/\/properties\/[^\/]+$/', '', $ParentURI);
             $ParentSchema = self::GetSchema($ParentURI);
             if (isset($ParentSchema['@table'])) {
-                $Table = explode(':', $ParentSchema['@table'])[0];
+                $Table = self::FilterTableName($ParentSchema['@table']);
             } else if (preg_match('/\/items$/', $ParentURI)) {
                 $ParentURI = preg_replace('/\/items$/', '', $ParentURI);
                 $ParentSchema = self::GetSchema($ParentURI);
                 if (isset($ParentSchema['@table'])) {
-                    $Table = explode(':', $ParentSchema['@table'])[0];
+                    $Table = self::FilterTableName($ParentSchema['@table']);
                 }
             }
         }
@@ -102,5 +102,10 @@ class Storage
     static public function DumpIndexes()
     {
         echo json_encode(self::$Indexes, JSON_PRETTY_PRINT);
+    }
+
+    static public function FilterTableName(string $TableName): string
+    {
+        return explode(':', $TableName)[0];
     }
 }

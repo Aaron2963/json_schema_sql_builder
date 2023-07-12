@@ -11,6 +11,7 @@ class SelectSQLBuilder extends SQLBuilder
     protected PDO $DB;
     protected string $SchemaURI;
     protected array $SelectExpressions = [];
+    protected array $MinifiedSelectExpressions = [];
     protected array $WhereConditions = [];
     protected array $OrderByExpressions = [];
     protected array $GroupByExpressions = [];
@@ -60,9 +61,13 @@ class SelectSQLBuilder extends SQLBuilder
     {
         $Result = "";
         if ($Minify) $this->MinifySelectExpressions();
-        $Result .= 'SELECT ' . implode(', ', $this->SelectExpressions) . ' FROM ' . $this->Table;
+        $Result .= 'SELECT ' . implode(', ', $Minify ? $this->MinifiedSelectExpressions : $this->SelectExpressions) . ' FROM ' . Storage::FilterTableName($this->Table);
         if (\count($this->TableReferences) > 0) {
-            $Result .= ' INNER JOIN (' . implode(', ', array_keys($this->TableReferences)) . ') ON (' . implode(' AND ', array_values($this->TableReferences)) . ')';
+            $Tables = array_keys($this->TableReferences);
+            $Tables = array_map(function ($Table) {
+                return Storage::FilterTableName($Table);
+            }, $Tables);
+            $Result .= ' INNER JOIN (' . implode(', ', $Tables) . ') ON (' . implode(' AND ', array_values($this->TableReferences)) . ')';
         }
         if (\count($this->WhereConditions) > 0) {
             $Result .= ' WHERE ' . implode(' AND ', $this->WhereConditions);
@@ -115,7 +120,7 @@ class SelectSQLBuilder extends SQLBuilder
         $Columns = [];
         $Schema = Storage::GetSchema($this->SchemaURI);
         $SchemaURI = \trim($this->SchemaURI, '#');
-        $Table = $Schema['@table'];
+        $Table = Storage::FilterTableName($Schema['@table']);
         $TableKey = $Schema['@id'];
         $Queue = [["$SchemaURI#" => $Schema]];
         while (\count($Queue) > 0) {
@@ -127,29 +132,30 @@ class SelectSQLBuilder extends SQLBuilder
                     $Queue[] = ["$Key/properties/$SubKey" => $SubAttr];
                 }
             } else if ($Attr['type'] === 'array') {
+                $ItemTable = Storage::FilterTableName($Attr['@table']);
                 if (array_key_exists('@table', $Attr) && array_key_exists('@joinId', $Attr)) {
-                    $this->AddJoinOn($Attr['@table'], "$Table.$TableKey = {$Attr['@table']}.{$Attr['@joinId']}");
+                    $this->AddJoinOn($ItemTable, "$Table.$TableKey = $ItemTable.{$Attr['@joinId']}");
                 }
                 if (array_search($Attr['items']['type'], ['string', 'number', 'integer', 'boolean']) !== false) {
                     $this->AddGroupBy("$Table.$TableKey");
                     $SQLString = Storage::GetSelectExpression("$Key/items");
                     $OrderBy = '';
                     if (array_key_exists('@orderBy', $Attr)) {
-                        $OrderBy = ' ORDER BY ' . $Attr['@table'] . '.' . ($Attr['items']['properties'][$Attr['@orderBy']]['@column'] ?? $Attr['@orderBy']);
+                        $OrderBy = ' ORDER BY ' . $ItemTable . '.' . ($Attr['items']['properties'][$Attr['@orderBy']]['@column'] ?? $Attr['@orderBy']);
                     }
                     $Columns[] = "GROUP_CONCAT($SQLString$OrderBy SEPARATOR '{$this->ArraySeparator}') AS '$Key'";
                 } else if ($Attr['items']['type'] === 'object') {
                     $this->AddGroupBy("$Table.$TableKey");
                     // 決定排序參考的鍵
-                    $OrderBy = $Attr['@table'] . '.' . array_key_first($Attr['items']['properties']);
+                    $OrderBy = $ItemTable . '.' . array_key_first($Attr['items']['properties']);
                     if (isset($Attr['items']['properties'][$OrderBy]['@column'])) {
-                        $OrderBy = $Attr['@table'] . '.' . $Attr['items']['properties'][$OrderBy]['@column'];
+                        $OrderBy = $ItemTable . '.' . $Attr['items']['properties'][$OrderBy]['@column'];
                     }
                     if (array_key_exists('@id', $Attr['items'])) {
-                        $OrderBy = $Attr['@table'] . '.' . ($Attr['items']['properties'][$Attr['items']['@id']]['@column'] ?? $Attr['items']['@id']);
+                        $OrderBy = $ItemTable . '.' . ($Attr['items']['properties'][$Attr['items']['@id']]['@column'] ?? $Attr['items']['@id']);
                     }
                     if (array_key_exists('@orderBy', $Attr)) {
-                        $OrderBy = $Attr['@table'] . '.' . ($Attr['items']['properties'][$Attr['@orderBy']]['@column'] ?? $Attr['@orderBy']);
+                        $OrderBy = $ItemTable . '.' . ($Attr['items']['properties'][$Attr['@orderBy']]['@column'] ?? $Attr['@orderBy']);
                     }
                     foreach ($Attr['items']['properties'] as $SubKey => $SubAttr) {
                         $SQLString = Storage::GetSelectExpression("$Key/items/properties/$SubKey");
@@ -171,7 +177,7 @@ class SelectSQLBuilder extends SQLBuilder
 
     protected function MinifySelectExpressions(): self
     {
-        $this->SelectExpressions = \array_map(function ($Expression) {
+        $this->MinifiedSelectExpressions = \array_map(function ($Expression) {
             $Escaped = \addcslashes($this->SchemaURI . '#/properties/', '\\/');
             $Replaced = \preg_replace('/ AS \'' . $Escaped . '/', ' AS \'', $Expression);
             return \preg_replace('/\/properties\//', '/', $Replaced);
@@ -274,7 +280,6 @@ class SelectSQLBuilder extends SQLBuilder
 
     public function ConvertDataKeys(array $Data): array
     {
-        $Result = [];
         $Schema = Storage::GetSchema($this->SchemaURI);
         $Iterate = function ($Schema, $Key, $Data) use (&$Iterate) {
             if ($Schema['type'] === 'object') {

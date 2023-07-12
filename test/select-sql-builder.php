@@ -38,6 +38,7 @@ $Builder->SetSelectExpressions()
   ->AddOrderBy('products.price', 'DESC')
   ->SetLimit(10)
   ->SetOffset(0);
+echo $Builder->Build(1);
 $Result = $Builder->Execute();
 
 // expected result
