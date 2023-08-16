@@ -92,10 +92,10 @@ class SelectSQLBuilder extends SQLBuilder
         $SQL = $this->Build();
         $Statement = $this->DB->prepare($SQL);
         $Statement->execute($this->BindValues);
-        $DataArray = $Statement->fetchAll(PDO::FETCH_ASSOC);
         if ($Statement->errorCode() !== '00000') {
             throw new \Exception($Statement->errorInfo()[2]);
         }
+        $DataArray = $Statement->fetchAll(PDO::FETCH_ASSOC);
         return array_map(function ($Data) {
             return $this->ConvertDataKeys($Data);
         }, $DataArray);
@@ -132,19 +132,27 @@ class SelectSQLBuilder extends SQLBuilder
                     $Queue[] = ["$Key/properties/$SubKey" => $SubAttr];
                 }
             } else if ($Attr['type'] === 'array') {
-                $ItemTable = Storage::FilterTableName($Attr['@table']);
-                if (array_key_exists('@table', $Attr) && array_key_exists('@joinId', $Attr)) {
-                    $this->AddJoinOn($ItemTable, "$Table.$TableKey = $ItemTable.{$Attr['@joinId']}");
+                $ItemTable = '';
+                if (array_key_exists('@table', $Attr)) {
+                    $ItemTable = Storage::FilterTableName($Attr['@table']);
+                    if (array_key_exists('@joinId', $Attr)) {
+                        $this->AddJoinOn($ItemTable, "$Table.$TableKey = $ItemTable.{$Attr['@joinId']}");
+                    }
                 }
                 if (array_search($Attr['items']['type'], ['string', 'number', 'integer', 'boolean']) !== false) {
                     $this->AddGroupBy("$Table.$TableKey");
                     $SQLString = Storage::GetSelectExpression("$Key/items");
+                    if ($SQLString == null) continue;
+                    if (str_starts_with(strtoupper($SQLString), '(SELECT')) {
+                        $Columns[] = "$SQLString AS '$Key'";
+                        continue;
+                    }
                     $OrderBy = '';
                     if (array_key_exists('@orderBy', $Attr)) {
                         $OrderBy = ' ORDER BY ' . $ItemTable . '.' . ($Attr['items']['properties'][$Attr['@orderBy']]['@column'] ?? $Attr['@orderBy']);
                     }
                     $Columns[] = "GROUP_CONCAT($SQLString$OrderBy SEPARATOR '{$this->ArraySeparator}') AS '$Key'";
-                } else if ($Attr['items']['type'] === 'object') {
+                } else if ($Attr['items']['type'] === 'object' && !empty($ItemTable)) {
                     $this->AddGroupBy("$Table.$TableKey");
                     // 決定排序參考的鍵
                     $OrderBy = $ItemTable . '.' . array_key_first($Attr['items']['properties']);
@@ -235,7 +243,7 @@ class SelectSQLBuilder extends SQLBuilder
     public function AddGroupBy(string $Expression): self
     {
         if (!\in_array($Expression, $this->GroupByExpressions)) {
-            $this->GroupByExpressions[] = $Expression;    
+            $this->GroupByExpressions[] = $Expression;
         }
         return $this;
     }
@@ -304,7 +312,7 @@ class SelectSQLBuilder extends SQLBuilder
                 }
                 return $Output;
             } else {
-                return $Data[$Key];
+                return $Data[$Key] ?? null;
             }
         };
         $Result = call_user_func_array($Iterate, [$Schema, $this->SchemaURI . '#', $Data]);
