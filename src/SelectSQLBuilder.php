@@ -67,7 +67,7 @@ class SelectSQLBuilder extends SQLBuilder
             $Tables = array_map(function ($Table) {
                 return Storage::FilterTableName($Table);
             }, $Tables);
-            $Result .= ' INNER JOIN (' . implode(', ', $Tables) . ') ON (' . implode(' AND ', array_values($this->TableReferences)) . ')';
+            $Result .= ' LEFT JOIN (' . implode(', ', $Tables) . ') ON (' . implode(' AND ', array_values($this->TableReferences)) . ')';
         }
         if (\count($this->WhereConditions) > 0) {
             $Result .= ' WHERE ' . implode(' AND ', $this->WhereConditions);
