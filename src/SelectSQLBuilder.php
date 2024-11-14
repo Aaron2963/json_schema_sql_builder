@@ -175,7 +175,13 @@ class SelectSQLBuilder extends SQLBuilder
             } else {
                 $SQLString = Storage::GetSelectExpression($Key);
                 if ($SQLString != null) {
-                    $Columns[] = "$SQLString AS '$Key'";
+                    $Expression = "$SQLString AS '$Key'";
+                    if ($Attr['format'] === 'date') {
+                        $Expression = "DATE_FORMAT($SQLString, '%Y-%m-%d') AS '$Key'";
+                    } else if ($Attr['format'] === 'date-time') {
+                        $Expression = "DATE_FORMAT($SQLString, '%Y-%m-%d %H:%i:%s') AS '$Key'";
+                    }
+                    $Columns[] = $Expression;
                 }
             }
         }
